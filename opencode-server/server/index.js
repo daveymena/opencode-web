@@ -56,11 +56,20 @@ app.get("/register", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/register.html"));
 });
 
+app.get("/dashboard-local", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/dashboard-local.html"));
+});
+
 app.get("/logout", async (req, res) => {
   const sessionId = req.cookies?.session;
   if (sessionId) await db.deleteSession(sessionId);
   res.clearCookie("session");
   res.redirect("/login");
+});
+
+// ── API de estado ──────────────────────────────────────────
+app.get("/api/status", (req, res) => {
+  res.json({ dbType, status: "ok" });
 });
 
 // ── API de autenticación ───────────────────────────────────

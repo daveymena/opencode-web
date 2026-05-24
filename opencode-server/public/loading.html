@@ -54,6 +54,23 @@
   <a href="/logout">Cerrar sesión</a>
 
   <script>
+    // Detectar si estamos en modo desarrollo local
+    async function checkEnvironment() {
+      try {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+        
+        // Si estamos en modo local (SQLite), redirigir al dashboard local
+        if (data.dbType === "sqlite") {
+          window.location.href = "/dashboard-local";
+          return;
+        }
+      } catch {}
+      
+      // En producción, intentar conectar a OpenCode
+      checkReady();
+    }
+
     // Redirige al proxy de OpenCode cuando esté listo
     async function checkReady() {
       try {
@@ -67,7 +84,7 @@
     }
 
     // Espera 1s para que el servidor inicie el proceso, luego empieza a sondear
-    setTimeout(checkReady, 1000);
+    setTimeout(checkEnvironment, 1000);
   </script>
 </body>
 </html>

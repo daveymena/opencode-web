@@ -63,11 +63,20 @@ app.get("/register", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/register.html"));
 });
 
+app.get("/dashboard-local", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/dashboard-local.html"));
+});
+
 app.get("/logout", async (req, res) => {
   const sessionId = req.cookies?.session;
   if (sessionId) await db.deleteSession(sessionId);
   res.clearCookie("session");
   res.redirect("/login");
+});
+
+// ── API de estado ──────────────────────────────────────────
+app.get("/api/status", (req, res) => {
+  res.json({ dbType, status: "ok" });
 });
 
 // ── API de autenticación ───────────────────────────────────
@@ -111,9 +120,9 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// ── Dashboard de inicio (redirección a OpenCode) ──────────
+// ── Dashboard de inicio (desarrollo local) ──────────
 app.get("/app", requireAuth, async (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/loading.html"));
+  res.sendFile(path.join(__dirname, "../public/dashboard-local.html"));
 });
 
 // ── Proxy a la instancia OpenCode del usuario ─────────────
