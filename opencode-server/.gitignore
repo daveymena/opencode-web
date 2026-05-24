@@ -1,0 +1,18 @@
+# Secretos — NUNCA subir a Git
+.env
+*.env.local
+*.env.production
+
+# Dependencias — se instalan con npm install
+node_modules/
+
+# Docker
+.docker/
+
+# Datos locales de OpenCode
+data/
+workspace/
+
+# Sistema
+.DS_Store
+Thumbs.db

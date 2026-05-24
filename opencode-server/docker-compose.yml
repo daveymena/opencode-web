@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    container_name: opencode-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-4096}:4096"
+    environment:
+      NODE_ENV: production
+      PORT: 4096
+      # ── Base de datos (EasyPanel — URL interna del servicio) ──
+      DATABASE_URL: ${DATABASE_URL}
+      PGHOST: ${PGHOST}
+      PGPORT: ${PGPORT:-5432}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      PGDATABASE: ${PGDATABASE}
+      # ── OpenCode ─────────────────────────────────────────────
+      OPENCODE_BASE_PORT: ${OPENCODE_BASE_PORT:-5100}
+      WORKSPACE_ROOT: /workspace
+      CONFIG_ROOT: /home/opencode/.config/opencode/users
+      DATA_ROOT: /home/opencode/.local/share/opencode/users
+      # ── Proveedores de IA ────────────────────────────────────
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    volumes:
+      - opencode-data:/home/opencode/.local/share/opencode
+      - opencode-config:/home/opencode/.config/opencode
+      - workspace:/workspace
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4096/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+volumes:
+  opencode-data:
+  opencode-config:
+  workspace:
