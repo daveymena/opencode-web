@@ -1,0 +1,46 @@
+version: "3"
+
+services:
+  app:
+    type: app
+    data:
+      source:
+        type: github
+        repo: tecnovariedades/opencode-iae
+        ref: main
+      build:
+        type: dockerfile
+        file: ./Dockerfile
+      deploy:
+        replicas: 1
+        command: node opencode-server/server/index.js
+        zeroDowntime: false
+      ports:
+        - published: 4096
+          target: 4096
+      env: |
+        NODE_ENV=production
+        PORT=4096
+        DATABASE_URL=postgres://postgres:$5v#th^EWJHJ^ucT4UslnJeRMhpT&LX&@tecnovariedades_opencode-db:5432/opencode?sslmode=disable
+        PGHOST=tecnovariedades_opencode-db
+        PGPORT=5432
+        PGUSER=postgres
+        PGPASSWORD=$5v#th^EWJHJ^ucT4UslnJeRMhpT&LX&
+        PGDATABASE=opencode
+        OPENCODE_BASE_PORT=5100
+        WORKSPACE_ROOT=/workspace
+        CONFIG_ROOT=/home/opencode/.config/opencode/users
+        DATA_ROOT=/home/opencode/.local/share/opencode/users
+        ANTHROPIC_API_KEY=
+        OPENAI_API_KEY=
+        GEMINI_API_KEY=
+      mounts:
+        - type: volume
+          name: opencode-workspace
+          mountPath: /workspace
+        - type: volume
+          name: opencode-config
+          mountPath: /home/opencode/.config/opencode
+        - type: volume
+          name: opencode-data
+          mountPath: /home/opencode/.local/share/opencode
