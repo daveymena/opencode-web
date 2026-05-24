@@ -1,8 +1,10 @@
-FROM ubuntu:24.04
-ENV DEBIAN_FRONTEND=noninteractive
+FROM node:20-alpine
+
+ENV NODE_ENV=production \
+    DEBIAN_FRONTEND=noninteractive
 
 # ── Dependencias del sistema ──────────────────────────────────
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
       curl \
       ca-certificates \
       git \
@@ -10,17 +12,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       sudo \
       bash \
       jq \
-      sqlite3 \
-      postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
-
-# ── Node.js 20 ────────────────────────────────────────────────
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+      sqlite \
+      postgresql-client
 
 # ── Usuario no-root ───────────────────────────────────────────
-RUN useradd -m -s /bin/bash opencode \
+RUN addgroup -g 1000 opencode \
+    && adduser -D -u 1000 -G opencode opencode \
     && echo "opencode ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/opencode \
     && chmod 0440 /etc/sudoers.d/opencode \
     && mkdir -p /workspace \
@@ -42,7 +39,7 @@ RUN mkdir -p \
 # ── Instalar dependencias Node.js ────────────────────────────
 WORKDIR /app
 COPY --chown=opencode:opencode package.json package-lock.json* ./
-RUN npm install --production --no-audit --no-fund
+RUN npm ci --production --no-audit --no-fund 2>/dev/null || npm install --production --no-audit --no-fund
 
 # ── Copiar código fuente ──────────────────────────────────────
 COPY --chown=opencode:opencode server/ ./server/

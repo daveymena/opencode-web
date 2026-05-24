@@ -3,31 +3,29 @@ set -e
 
 export PATH="/home/opencode/.opencode/bin:/home/opencode/.local/bin:$PATH"
 
-echo "==> Iniciando OpenCode Web Server v$(opencode --version 2>/dev/null || echo 'desconocida')"
+echo "==> Iniciando OpenCode Platform Server"
+echo "==> Node.js: $(node --version)"
+echo "==> npm: $(npm --version)"
 
-if [ -n "$OPENCODE_SERVER_PASSWORD" ]; then
-  echo "==> Autenticación habilitada"
-else
-  echo "==> ADVERTENCIA: OPENCODE_SERVER_PASSWORD no configurado — acceso sin contraseña"
+# Verificar variables críticas
+if [ -z "$DATABASE_URL" ] && [ -z "$PGHOST" ]; then
+  echo "❌ ERROR: DATABASE_URL o PGHOST no configurados"
+  exit 1
 fi
 
 if [ -n "$DATABASE_URL" ]; then
-  echo "==> Base de datos: $DATABASE_URL" | sed 's|//.*:.*@|//***:***@|'
+  echo "==> Base de datos: $(echo $DATABASE_URL | sed 's|//.*:.*@|//***:***@|')"
+else
+  echo "==> Base de datos: $PGUSER@$PGHOST:$PGPORT/$PGDATABASE"
 fi
 
-if [ -n "$ANTHROPIC_API_KEY" ]; then
-  echo "==> Proveedor activo: Anthropic (Claude)"
-fi
-if [ -n "$OPENAI_API_KEY" ]; then
-  echo "==> Proveedor activo: OpenAI"
-fi
-if [ -n "$GEMINI_API_KEY" ]; then
-  echo "==> Proveedor activo: Google Gemini"
-fi
+echo "==> Puerto: ${PORT:-4096}"
+echo "==> Entorno: ${NODE_ENV:-development}"
 
-PORT="${OPENCODE_PORT:-4096}"
-echo "==> Arrancando interfaz web en 0.0.0.0:$PORT ..."
+# Crear directorios necesarios
+mkdir -p "${WORKSPACE_ROOT:-/workspace}"
+mkdir -p "${CONFIG_ROOT:-/home/opencode/.config/opencode/users}"
+mkdir -p "${DATA_ROOT:-/home/opencode/.local/share/opencode/users}"
 
-exec opencode web \
-  --port "$PORT" \
-  --hostname 0.0.0.0
+echo "==> Iniciando servidor..."
+exec node server/index.js
