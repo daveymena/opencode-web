@@ -3,8 +3,31 @@ const express = require("express");
 const cookieParser = require("cookie-parser");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const path = require("path");
-const db = require("./db");
 const instances = require("./instances");
+
+// Detectar si PostgreSQL está disponible, si no usar SQLite
+let db;
+let dbType = "sqlite";
+
+async function initializeDB() {
+  // Intentar conectar a PostgreSQL primero
+  if (process.env.DATABASE_URL || process.env.PGHOST) {
+    try {
+      db = require("./db");
+      await db.pool.query("SELECT 1");
+      dbType = "postgresql";
+      console.log("[db] Usando PostgreSQL");
+      return;
+    } catch (err) {
+      console.log("[db] PostgreSQL no disponible, usando SQLite como fallback");
+    }
+  }
+  
+  // Fallback a SQLite
+  db = require("./db-sqlite");
+  dbType = "sqlite";
+  console.log("[db] Usando SQLite");
+}
 
 const app = express();
 const PORT = process.env.PORT || 4096;
@@ -123,9 +146,11 @@ app.get("/", async (req, res) => {
 
 // ── Inicio ─────────────────────────────────────────────────
 async function main() {
+  await initializeDB();
   await db.init();
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[opencode-platform] Servidor en http://0.0.0.0:${PORT}`);
+    console.log(`[opencode-platform] Base de datos: ${dbType.toUpperCase()}`);
   });
 }
 

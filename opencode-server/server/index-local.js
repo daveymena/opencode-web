@@ -3,8 +3,38 @@ const express = require("express");
 const cookieParser = require("cookie-parser");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const path = require("path");
-const db = require("./db-sqlite");
-const instances = require("./instances");
+
+// Detectar si PostgreSQL está disponible, si no usar SQLite
+let db;
+let dbType = "sqlite";
+
+async function initializeDB() {
+  // Intentar conectar a PostgreSQL primero
+  if (process.env.DATABASE_URL || process.env.PGHOST) {
+    try {
+      db = require("./db");
+      await db.pool.query("SELECT 1");
+      dbType = "postgresql";
+      console.log("[db] Usando PostgreSQL");
+      return;
+    } catch (err) {
+      console.log("[db] PostgreSQL no disponible, usando SQLite como fallback");
+    }
+  }
+  
+  // Fallback a SQLite
+  db = require("./db-sqlite");
+  dbType = "sqlite";
+  console.log("[db] Usando SQLite");
+}
+
+// Crear instancias sin usar db (para desarrollo local)
+const instances = {
+  getInstancePort: () => null,
+  startInstance: async () => {
+    throw new Error("OpenCode instances no están disponibles en modo desarrollo local");
+  }
+};
 
 const app = express();
 const PORT = process.env.PORT || 4096;
@@ -88,28 +118,7 @@ app.get("/app", requireAuth, async (req, res) => {
 
 // ── Proxy a la instancia OpenCode del usuario ─────────────
 app.use("/app/oc", requireAuth, async (req, res, next) => {
-  try {
-    let port = instances.getInstancePort(req.user.user_id);
-    if (!port) {
-      port = await instances.startInstance(req.user.user_id);
-    }
-    const proxy = createProxyMiddleware({
-      target: `http://127.0.0.1:${port}`,
-      changeOrigin: true,
-      ws: true,
-      pathRewrite: { "^/app/oc": "" },
-      on: {
-        error: (err, req, res) => {
-          console.error("[proxy]", err.message);
-          res.status(502).send("OpenCode iniciando... recarga en unos segundos.");
-        },
-      },
-    });
-    proxy(req, res, next);
-  } catch (err) {
-    console.error("[proxy setup]", err);
-    res.status(500).send("Error al iniciar tu instancia de OpenCode");
-  }
+  res.status(503).send("OpenCode instances no están disponibles en modo desarrollo local. Este endpoint solo funciona en producción con EasyPanel.");
 });
 
 // ── Raíz: redirige al login o al app ──────────────────────
@@ -123,10 +132,11 @@ app.get("/", async (req, res) => {
 
 // ── Inicio ─────────────────────────────────────────────────
 async function main() {
+  await initializeDB();
   await db.init();
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[opencode-platform] Servidor en http://localhost:${PORT}`);
-    console.log(`[opencode-platform] Usando SQLite (desarrollo local)`);
+    console.log(`[opencode-platform] Base de datos: ${dbType.toUpperCase()}`);
   });
 }
 
