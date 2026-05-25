@@ -1,8 +1,13 @@
-require("dotenv").config();
+const path = require("path");
+
+// Cargar .env.local (raíz del proyecto) primero para desarrollo local
+require("dotenv").config({ path: path.join(__dirname, "../../.env.local") });
+// Luego .env (opencode-server) para producción (EasyPanel)
+require("dotenv").config({ path: path.join(__dirname, "../.env") });
+
 const express = require("express");
 const cookieParser = require("cookie-parser");
 const { createProxyMiddleware } = require("http-proxy-middleware");
-const path = require("path");
 const instances = require("./instances");
 
 // Detectar si PostgreSQL está disponible, si no usar SQLite
@@ -17,6 +22,7 @@ async function initializeDB() {
       await db.pool.query("SELECT 1");
       dbType = "postgresql";
       console.log("[db] Usando PostgreSQL");
+      instances.setDb(db);
       return;
     } catch (err) {
       console.log("[db] PostgreSQL no disponible, usando SQLite como fallback");
@@ -26,6 +32,7 @@ async function initializeDB() {
   // Fallback a SQLite
   db = require("./db-sqlite");
   dbType = "sqlite";
+  instances.setDb(db);
   console.log("[db] Usando SQLite");
 }
 
@@ -84,7 +91,16 @@ app.post("/api/register", async (req, res) => {
     const user = await db.createUser(email, username, password);
     const sessionId = await db.createSession(user.id);
     res.cookie("session", sessionId, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 7 * 24 * 60 * 60 * 1000 });
-    res.json({ ok: true, redirect: "/app" });
+    if (process.env.NODE_ENV === "production") {
+      res.json({ ok: true, redirect: "/app" });
+    } else {
+      try {
+        const port = await instances.startInstance(user.id);
+        res.json({ ok: true, redirect: `http://localhost:${port}` });
+      } catch {
+        res.json({ ok: true, redirect: "/dashboard-local" });
+      }
+    }
   } catch (err) {
     if (err.code === "23505") return res.status(409).json({ error: "El email o usuario ya existe" });
     console.error("[register]", err);
@@ -106,16 +122,34 @@ app.post("/api/login", async (req, res) => {
 
     const sessionId = await db.createSession(user.id);
     res.cookie("session", sessionId, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 7 * 24 * 60 * 60 * 1000 });
-    res.json({ ok: true, redirect: "/app" });
+    if (process.env.NODE_ENV === "production") {
+      res.json({ ok: true, redirect: "/app" });
+    } else {
+      try {
+        const port = await instances.startInstance(user.id);
+        res.json({ ok: true, redirect: `http://localhost:${port}` });
+      } catch {
+        res.json({ ok: true, redirect: "/dashboard-local" });
+      }
+    }
   } catch (err) {
     console.error("[login]", err);
     res.status(500).json({ error: "Error interno del servidor" });
   }
 });
 
-// ── Dashboard de inicio (redirección a OpenCode) ──────────
+// ── Dashboard de inicio ──────────────────────────────────
 app.get("/app", requireAuth, async (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/loading.html"));
+  if (process.env.NODE_ENV === "production") {
+    res.sendFile(path.join(__dirname, "../public/loading.html"));
+  } else {
+    try {
+      const port = await instances.startInstance(req.user.user_id);
+      res.redirect(`http://localhost:${port}`);
+    } catch {
+      res.redirect("/dashboard-local");
+    }
+  }
 });
 
 // ── Proxy a la instancia OpenCode del usuario ─────────────
@@ -144,13 +178,22 @@ app.use("/app/oc", requireAuth, async (req, res, next) => {
   }
 });
 
-// ── Raíz: redirige al login o al app ──────────────────────
+// ── Raíz: redirige al login, dashboard u OpenCode ───────
 app.get("/", async (req, res) => {
   const sessionId = req.cookies?.session;
   if (!sessionId) return res.redirect("/login");
   const session = await db.getSession(sessionId);
   if (!session) return res.redirect("/login");
-  res.redirect("/app");
+  if (process.env.NODE_ENV === "production") {
+    res.redirect("/app");
+  } else {
+    try {
+      const port = await instances.startInstance(session.user_id);
+      res.redirect(`http://localhost:${port}`);
+    } catch {
+      res.redirect("/dashboard-local");
+    }
+  }
 });
 
 // ── Inicio ─────────────────────────────────────────────────

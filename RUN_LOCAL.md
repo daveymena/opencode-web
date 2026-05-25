@@ -16,14 +16,20 @@ run-local.bat
 
 O manualmente:
 
-### Paso 2: Iniciar Docker Compose
+### Paso 2: Iniciar solo PostgreSQL (recomendado)
 ```bash
-docker-compose up -d
+docker-compose up -d db
 ```
+
+> O si prefieres ejecutar todo en Docker (app + db):
+> ```bash
+> docker-compose up -d
+> ```
 
 ### Paso 3: Esperar a PostgreSQL
 ```bash
-# Esperar 10 segundos
+# Esperar 10 segundos o verificar con:
+docker-compose logs db
 ```
 
 ### Paso 4: Instalar dependencias

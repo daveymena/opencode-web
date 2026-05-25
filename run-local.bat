@@ -28,12 +28,12 @@ if not exist docker-compose.yml (
 echo ✅ docker-compose.yml encontrado
 echo.
 
-REM Iniciar Docker Compose
-echo 🐳 Iniciando Docker Compose...
-docker-compose up -d
+REM Iniciar solo PostgreSQL en Docker
+echo 🐳 Iniciando PostgreSQL...
+docker-compose up -d db
 
 if errorlevel 1 (
-    echo ❌ Error al iniciar Docker Compose
+    echo ❌ Error al iniciar PostgreSQL
     exit /b 1
 )
 

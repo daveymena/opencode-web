@@ -1,6 +1,24 @@
 version: "3.9"
 
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: opencode-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: opencode
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   app:
     build: .
     container_name: opencode-app
@@ -10,13 +28,13 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4096
-      # ── Base de datos (EasyPanel — URL interna del servicio) ──
-      DATABASE_URL: ${DATABASE_URL}
-      PGHOST: ${PGHOST}
-      PGPORT: ${PGPORT:-5432}
-      PGUSER: ${PGUSER}
-      PGPASSWORD: ${PGPASSWORD}
-      PGDATABASE: ${PGDATABASE}
+      # ── Base de datos ────────────────────────────────────────
+      DATABASE_URL: postgres://postgres:password123@db:5432/opencode?sslmode=disable
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: password123
+      PGDATABASE: opencode
       # ── OpenCode ─────────────────────────────────────────────
       OPENCODE_BASE_PORT: ${OPENCODE_BASE_PORT:-5100}
       WORKSPACE_ROOT: /workspace
@@ -30,6 +48,9 @@ services:
       - opencode-data:/home/opencode/.local/share/opencode
       - opencode-config:/home/opencode/.config/opencode
       - workspace:/workspace
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4096/login"]
       interval: 30s
@@ -38,6 +59,7 @@ services:
       start_period: 90s
 
 volumes:
+  pgdata:
   opencode-data:
   opencode-config:
   workspace:

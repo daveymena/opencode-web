@@ -1,9 +1,13 @@
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
-const db = require("./db");
 
+let db = require("./db");
 const processes = new Map();
+
+function setDb(instance) {
+  db = instance;
+}
 
 function getUserWorkspace(userId) {
   const base = process.env.WORKSPACE_ROOT || "/workspace";
@@ -112,4 +116,4 @@ function waitForPort(port, timeoutMs = 15000) {
   });
 }
 
-module.exports = { startInstance, stopInstance, getInstancePort, getUserWorkspace };
+module.exports = { startInstance, stopInstance, getInstancePort, getUserWorkspace, setDb };

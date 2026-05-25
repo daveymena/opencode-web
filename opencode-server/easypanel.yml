@@ -6,10 +6,9 @@ services:
     data:
       source:
         type: github
-        # Cambia esto por tu repositorio
-        # repo: tu-usuario/opencode-deployment
-        # ref: main
-        # path: /opencode-server
+        repo: daveymena/opencode-web
+        ref: main
+        path: /opencode-server
       build:
         type: dockerfile
         file: Dockerfile

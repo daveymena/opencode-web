@@ -22,11 +22,11 @@ else
 fi
 
 echo ""
-echo "🐳 Iniciando Docker Compose..."
+echo "🐳 Iniciando PostgreSQL..."
 echo ""
 
-# Iniciar servicios
-docker-compose up -d
+# Iniciar solo PostgreSQL
+docker-compose up -d db
 
 echo ""
 echo "⏳ Esperando a que PostgreSQL esté listo..."
