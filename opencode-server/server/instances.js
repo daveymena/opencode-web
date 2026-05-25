@@ -90,15 +90,23 @@ async function startInstance(userId) {
   const configDir = getUserConfigDir(userId);
   const dataDir = getUserDataDir(userId);
 
+  // En producción (EasyPanel) HOME=/home/opencode existe dentro del contenedor.
+  // En Replit usamos el HOME real del proceso para no romper la instalación.
+  const isProduction = process.env.NODE_ENV === "production";
+  const homeDir = isProduction ? "/home/opencode" : (process.env.HOME || require("os").homedir());
+
   const env = {
     ...process.env,
-    HOME: "/home/opencode",
+    HOME: homeDir,
     XDG_CONFIG_HOME: configDir,
     XDG_DATA_HOME: dataDir,
     OPENCODE_CONFIG_DIR: configDir,
   };
 
-  const opencodeCmd = process.env.OPENCODE_BIN || "opencode";
+  // Buscar el binario: variable de entorno > PATH completo
+  const opencodeCmd = process.env.OPENCODE_BIN ||
+    require("child_process").execSync("which opencode 2>/dev/null || echo opencode")
+      .toString().trim();
 
   console.log(`[oc:${userId}] Iniciando en puerto ${port}...`);
 
