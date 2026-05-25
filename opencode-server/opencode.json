@@ -1,5 +1,16 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "autoupdate": false,
-  "snapshot": true
+  "snapshot": true,
+  "model": "opencode/big-pickle",
+  "provider": {
+    "opencode": {
+      "name": "OpenCode (Free)",
+      "models": [
+        "opencode/big-pickle",
+        "opencode/deepseek-v4-flash-free",
+        "opencode/nemotron-3-super-free"
+      ]
+    }
+  }
 }
