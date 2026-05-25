@@ -8,8 +8,10 @@ const instances = require("./instances");
 const app = express();
 const PORT = process.env.PORT || 4096;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// ⚠️  Los parsers de body SOLO en /api/* — si se aplican globalmente
+//    consumen el stream antes de que el proxy lo reenvíe a OpenCode.
+const jsonParser = express.json();
+const urlencodedParser = express.urlencoded({ extended: true });
 app.use(cookieParser());
 
 // ── Helper: obtener sesión ────────────────────────────────
@@ -34,7 +36,7 @@ app.get("/logout", async (req, res) => {
 });
 
 // ── API de autenticación ──────────────────────────────────
-app.post("/api/register", async (req, res) => {
+app.post("/api/register", jsonParser, urlencodedParser, async (req, res) => {
   try {
     const { email, username, password } = req.body;
     if (!email || !username || !password)
@@ -57,7 +59,7 @@ app.post("/api/register", async (req, res) => {
   }
 });
 
-app.post("/api/login", async (req, res) => {
+app.post("/api/login", jsonParser, urlencodedParser, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password)
