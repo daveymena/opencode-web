@@ -8,25 +8,30 @@ const db = require("./db");
 // Mapa de instancias activas: userId -> { port, proc, proxy }
 const instances = new Map();
 
-function getUserWorkspace(userId) {
-  const base = process.env.WORKSPACE_ROOT || "/workspace";
-  const dir = path.join(base, `user_${userId}`);
+// Rutas por defecto dentro del proyecto (funcionan en Replit y en cualquier entorno)
+// En EasyPanel se sobreescriben con las variables de entorno
+const DEFAULT_WORKSPACE_ROOT = path.join(__dirname, "../../data/workspaces");
+const DEFAULT_CONFIG_ROOT    = path.join(__dirname, "../../data/config");
+const DEFAULT_DATA_ROOT      = path.join(__dirname, "../../data/appdata");
+
+function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+function getUserWorkspace(userId) {
+  const base = process.env.WORKSPACE_ROOT || DEFAULT_WORKSPACE_ROOT;
+  return ensureDir(path.join(base, `user_${userId}`));
 }
 
 function getUserConfigDir(userId) {
-  const base = process.env.CONFIG_ROOT || "/home/opencode/.config/opencode/users";
-  const dir = path.join(base, `user_${userId}`);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return dir;
+  const base = process.env.CONFIG_ROOT || DEFAULT_CONFIG_ROOT;
+  return ensureDir(path.join(base, `user_${userId}`));
 }
 
 function getUserDataDir(userId) {
-  const base = process.env.DATA_ROOT || "/home/opencode/.local/share/opencode/users";
-  const dir = path.join(base, `user_${userId}`);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return dir;
+  const base = process.env.DATA_ROOT || DEFAULT_DATA_ROOT;
+  return ensureDir(path.join(base, `user_${userId}`));
 }
 
 function waitForPort(port, timeoutMs = 30000) {
