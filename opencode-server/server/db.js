@@ -1,23 +1,10 @@
 const { Pool } = require("pg");
 const bcrypt = require("bcryptjs");
 
-// SSL: si DATABASE_URL contiene sslmode=disable (EasyPanel interno), no usar SSL
-// Si no hay DATABASE_URL, armar conexión desde variables individuales
-const dbConfig = process.env.DATABASE_URL
-  ? {
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL.includes("sslmode=disable") ? false : { rejectUnauthorized: false },
-    }
-  : {
-      host:     process.env.PGHOST     || "localhost",
-      port:     parseInt(process.env.PGPORT || "5432"),
-      user:     process.env.PGUSER     || "postgres",
-      password: process.env.PGPASSWORD || "",
-      database: process.env.PGDATABASE || "davey",
-      ssl: false,
-    };
-
-const pool = new Pool(dbConfig);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : false,
+});
 
 async function init() {
   await pool.query(`
