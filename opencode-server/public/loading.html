@@ -23,14 +23,42 @@
       border-radius: 14px;
       display: flex; align-items: center; justify-content: center;
       font-size: 28px;
-      animation: pulse 2s ease-in-out infinite;
     }
+    .logo-icon.loading { animation: pulse 2s ease-in-out infinite; }
+    .logo-icon.error   { background: linear-gradient(135deg, #ef4444, #dc2626); animation: none; }
     @keyframes pulse {
       0%, 100% { transform: scale(1); opacity: 1; }
       50% { transform: scale(1.08); opacity: 0.85; }
     }
     h2 { font-size: 20px; font-weight: 600; color: #f1f5f9; }
-    p { font-size: 14px; color: #64748b; }
+    p  { font-size: 14px; color: #64748b; margin-top: 6px; }
+    #error-box {
+      display: none;
+      background: #1e1b2e;
+      border: 1px solid #dc2626;
+      border-radius: 10px;
+      padding: 14px 20px;
+      max-width: 360px;
+      text-align: center;
+      font-size: 13px;
+      color: #fca5a5;
+      line-height: 1.5;
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 8px 20px;
+      background: #4f46e5;
+      color: #fff;
+      border-radius: 8px;
+      font-size: 13px;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+    }
+    .btn:hover { background: #4338ca; }
+    a.logout { color: #818cf8; font-size: 13px; text-decoration: none; }
+    a.logout:hover { text-decoration: underline; }
     .dots::after {
       content: "";
       animation: dots 1.5s steps(4, end) infinite;
@@ -41,50 +69,72 @@
       50%  { content: ".."; }
       75%  { content: "..."; }
     }
-    a { color: #818cf8; font-size: 13px; text-decoration: none; margin-top: 8px; }
-    a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div class="logo-icon">⚡</div>
-  <div style="text-align:center">
+  <div class="logo-icon loading" id="icon">⚡</div>
+  <div style="text-align:center" id="status-text">
     <h2>Iniciando tu OpenCode<span class="dots"></span></h2>
     <p>Preparando tu espacio privado, esto toma unos segundos</p>
   </div>
-  <a href="/logout">Cerrar sesión</a>
+  <div id="error-box"></div>
+  <a href="/logout" class="logout">Cerrar sesión</a>
 
   <script>
-    // Detectar si estamos en modo desarrollo local
-    async function checkEnvironment() {
-      try {
-        const res = await fetch("/api/status");
-        const data = await res.json();
-        
-        // Si estamos en modo local (SQLite), redirigir al dashboard local
-        if (data.dbType === "sqlite") {
-          window.location.href = "/dashboard-local";
-          return;
-        }
-      } catch {}
-      
-      // En producción, intentar conectar a OpenCode
-      checkReady();
-    }
+    let attempts = 0;
+    const MAX_ATTEMPTS = 40; // ~60 segundos máximo
 
-    // Redirige al proxy de OpenCode cuando esté listo
     async function checkReady() {
+      attempts++;
+
+      // Timeout de seguridad
+      if (attempts > MAX_ATTEMPTS) {
+        showError(
+          "OpenCode tardó demasiado en iniciar.<br>" +
+          "Puede que falte configurar una clave de IA (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.).",
+          true
+        );
+        return;
+      }
+
       try {
         const res = await fetch("/app/oc/", { redirect: "follow" });
-        if (res.ok || res.status === 401) {
+        if (res.ok || res.status === 101 || res.status === 401) {
           window.location.href = "/app/oc/";
           return;
         }
-      } catch {}
+        if (res.status === 500) {
+          const text = await res.text().catch(() => "");
+          showError(text || "Error interno al iniciar OpenCode.", true);
+          return;
+        }
+      } catch (e) {
+        // 502 o error de red → todavía iniciando, seguir esperando
+      }
+
       setTimeout(checkReady, 1500);
     }
 
-    // Espera 1s para que el servidor inicie el proceso, luego empieza a sondear
-    setTimeout(checkEnvironment, 1000);
+    function showError(msg, fatal) {
+      const icon = document.getElementById("icon");
+      const statusText = document.getElementById("status-text");
+      const errorBox = document.getElementById("error-box");
+
+      icon.classList.remove("loading");
+      icon.classList.add("error");
+      icon.textContent = "⚠️";
+
+      statusText.querySelector("h2").textContent = "No se pudo iniciar";
+      statusText.querySelector("p").textContent = "Revisa la configuración del servidor";
+
+      errorBox.style.display = "block";
+      errorBox.innerHTML = msg + (fatal
+        ? `<br><br><button class="btn" onclick="location.reload()">🔄 Reintentar</button>`
+        : "");
+    }
+
+    // Espera 1s antes de empezar a sondear
+    setTimeout(checkReady, 1000);
   </script>
 </body>
 </html>
