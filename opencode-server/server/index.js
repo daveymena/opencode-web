@@ -1,40 +1,9 @@
-const path = require("path");
-
-// Cargar .env.local (raíz del proyecto) primero para desarrollo local
-require("dotenv").config({ path: path.join(__dirname, "../../.env.local") });
-// Luego .env (opencode-server) para producción (EasyPanel)
-require("dotenv").config({ path: path.join(__dirname, "../.env") });
-
+require("dotenv").config();
 const express = require("express");
 const cookieParser = require("cookie-parser");
-const { createProxyMiddleware } = require("http-proxy-middleware");
+const path = require("path");
+const db = require("./db");
 const instances = require("./instances");
-
-// Detectar si PostgreSQL está disponible, si no usar SQLite
-let db;
-let dbType = "sqlite";
-
-async function initializeDB() {
-  // Intentar conectar a PostgreSQL primero
-  if (process.env.DATABASE_URL || process.env.PGHOST) {
-    try {
-      db = require("./db");
-      await db.pool.query("SELECT 1");
-      dbType = "postgresql";
-      console.log("[db] Usando PostgreSQL");
-      instances.setDb(db);
-      return;
-    } catch (err) {
-      console.log("[db] PostgreSQL no disponible, usando SQLite como fallback");
-    }
-  }
-  
-  // Fallback a SQLite
-  db = require("./db-sqlite");
-  dbType = "sqlite";
-  instances.setDb(db);
-  console.log("[db] Usando SQLite");
-}
 
 const app = express();
 const PORT = process.env.PORT || 4096;
@@ -43,6 +12,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// ── Autenticación ──────────────────────────────────────────
 async function requireAuth(req, res, next) {
   const sessionId = req.cookies?.session;
   if (!sessionId) return res.redirect("/login");
@@ -55,28 +25,17 @@ async function requireAuth(req, res, next) {
 // ── Páginas estáticas ──────────────────────────────────────
 app.use("/assets", express.static(path.join(__dirname, "../public/assets")));
 
-app.get("/login", (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/login.html"));
-});
+app.get("/login", (req, res) =>
+  res.sendFile(path.join(__dirname, "../public/login.html")));
 
-app.get("/register", (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/register.html"));
-});
-
-app.get("/dashboard-local", (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/dashboard-local.html"));
-});
+app.get("/register", (req, res) =>
+  res.sendFile(path.join(__dirname, "../public/register.html")));
 
 app.get("/logout", async (req, res) => {
   const sessionId = req.cookies?.session;
   if (sessionId) await db.deleteSession(sessionId);
   res.clearCookie("session");
   res.redirect("/login");
-});
-
-// ── API de estado ──────────────────────────────────────────
-app.get("/api/status", (req, res) => {
-  res.json({ dbType, status: "ok" });
 });
 
 // ── API de autenticación ───────────────────────────────────
@@ -90,19 +49,15 @@ app.post("/api/register", async (req, res) => {
 
     const user = await db.createUser(email, username, password);
     const sessionId = await db.createSession(user.id);
-    res.cookie("session", sessionId, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 7 * 24 * 60 * 60 * 1000 });
-    if (process.env.NODE_ENV === "production") {
-      res.json({ ok: true, redirect: "/app" });
-    } else {
-      try {
-        const port = await instances.startInstance(user.id);
-        res.json({ ok: true, redirect: `http://localhost:${port}` });
-      } catch {
-        res.json({ ok: true, redirect: "/dashboard-local" });
-      }
-    }
+    res.cookie("session", sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+    res.json({ ok: true, redirect: "/app" });
   } catch (err) {
-    if (err.code === "23505") return res.status(409).json({ error: "El email o usuario ya existe" });
+    if (err.code === "23505")
+      return res.status(409).json({ error: "El email o usuario ya existe" });
     console.error("[register]", err);
     res.status(500).json({ error: "Error interno del servidor" });
   }
@@ -121,88 +76,86 @@ app.post("/api/login", async (req, res) => {
     if (!valid) return res.status(401).json({ error: "Credenciales incorrectas" });
 
     const sessionId = await db.createSession(user.id);
-    res.cookie("session", sessionId, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 7 * 24 * 60 * 60 * 1000 });
-    if (process.env.NODE_ENV === "production") {
-      res.json({ ok: true, redirect: "/app" });
-    } else {
-      try {
-        const port = await instances.startInstance(user.id);
-        res.json({ ok: true, redirect: `http://localhost:${port}` });
-      } catch {
-        res.json({ ok: true, redirect: "/dashboard-local" });
-      }
-    }
+    res.cookie("session", sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+    res.json({ ok: true, redirect: "/app" });
   } catch (err) {
     console.error("[login]", err);
     res.status(500).json({ error: "Error interno del servidor" });
   }
 });
 
-// ── Dashboard de inicio ──────────────────────────────────
-app.get("/app", requireAuth, async (req, res) => {
-  if (process.env.NODE_ENV === "production") {
-    res.sendFile(path.join(__dirname, "../public/loading.html"));
-  } else {
-    try {
-      const port = await instances.startInstance(req.user.user_id);
-      res.redirect(`http://localhost:${port}`);
-    } catch {
-      res.redirect("/dashboard-local");
-    }
-  }
-});
+// ── Pantalla de carga del app ──────────────────────────────
+app.get("/app", requireAuth, (req, res) =>
+  res.sendFile(path.join(__dirname, "../public/loading.html")));
 
 // ── Proxy a la instancia OpenCode del usuario ─────────────
+// El proxy es PERSISTENTE por usuario — soporta WebSockets correctamente
 app.use("/app/oc", requireAuth, async (req, res, next) => {
   try {
-    let port = instances.getInstancePort(req.user.user_id);
-    if (!port) {
-      port = await instances.startInstance(req.user.user_id);
+    let inst = instances.getInstance(req.user.user_id);
+    if (!inst) {
+      inst = await instances.startInstance(req.user.user_id);
     }
-    const proxy = createProxyMiddleware({
-      target: `http://127.0.0.1:${port}`,
-      changeOrigin: true,
-      ws: true,
-      pathRewrite: { "^/app/oc": "" },
-      on: {
-        error: (err, req, res) => {
-          console.error("[proxy]", err.message);
-          res.status(502).send("OpenCode iniciando... recarga en unos segundos.");
-        },
-      },
-    });
-    proxy(req, res, next);
+    // Reutiliza el mismo proxy (conexiones WS se mantienen)
+    inst.proxy(req, res, next);
   } catch (err) {
-    console.error("[proxy setup]", err);
-    res.status(500).send("Error al iniciar tu instancia de OpenCode");
+    console.error("[proxy setup]", err.message);
+    if (!res.headersSent) {
+      res.status(500).send(`
+        <html><body style="font-family:sans-serif;text-align:center;padding:40px">
+          <h2>⚠️ Error al iniciar OpenCode</h2>
+          <p>${err.message}</p>
+          <a href="/app">← Reintentar</a>
+        </body></html>
+      `);
+    }
   }
 });
 
-// ── Raíz: redirige al login, dashboard u OpenCode ───────
+// ── Raíz: redirige según sesión ────────────────────────────
 app.get("/", async (req, res) => {
   const sessionId = req.cookies?.session;
   if (!sessionId) return res.redirect("/login");
   const session = await db.getSession(sessionId);
   if (!session) return res.redirect("/login");
-  if (process.env.NODE_ENV === "production") {
-    res.redirect("/app");
-  } else {
-    try {
-      const port = await instances.startInstance(session.user_id);
-      res.redirect(`http://localhost:${port}`);
-    } catch {
-      res.redirect("/dashboard-local");
-    }
-  }
+  res.redirect("/app");
 });
 
-// ── Inicio ─────────────────────────────────────────────────
+// ── Inicio del servidor ────────────────────────────────────
 async function main() {
-  await initializeDB();
   await db.init();
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[opencode-platform] Servidor en http://0.0.0.0:${PORT}`);
-    console.log(`[opencode-platform] Base de datos: ${dbType.toUpperCase()}`);
+
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`[opencode-platform] ✅ Servidor en http://0.0.0.0:${PORT}`);
+  });
+
+  // Soporte para WebSocket upgrades (necesario para OpenCode)
+  server.on("upgrade", async (req, socket, head) => {
+    // Extraer cookie de sesión del header
+    const cookieHeader = req.headers.cookie || "";
+    const sessionId = cookieHeader
+      .split(";")
+      .map((c) => c.trim())
+      .find((c) => c.startsWith("session="))
+      ?.split("=")[1];
+
+    if (!sessionId) { socket.destroy(); return; }
+
+    const session = await db.getSession(sessionId).catch(() => null);
+    if (!session) { socket.destroy(); return; }
+
+    let inst = instances.getInstance(session.user_id);
+    if (!inst) {
+      inst = await instances.startInstance(session.user_id).catch(() => null);
+    }
+    if (!inst) { socket.destroy(); return; }
+
+    // Delegar el upgrade al proxy del usuario
+    inst.proxy.upgrade(req, socket, head);
   });
 }
 
