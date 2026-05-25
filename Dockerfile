@@ -1,23 +1,20 @@
 FROM node:20-alpine
 
-ENV NODE_ENV=production \
-    DEBIAN_FRONTEND=noninteractive
-
-# ── Dependencias del sistema ──────────────────────────────────
+# ── Dependencias del sistema ───────────────────────────────
 RUN apk add --no-cache \
       curl \
       ca-certificates \
       git \
       openssh-client \
-      sudo \
       bash \
       jq \
       sqlite \
-      postgresql-client
+      postgresql-client \
+      sudo
 
-# ── Usuario no-root ───────────────────────────────────────────
-RUN addgroup -g 1000 opencode \
-    && adduser -D -u 1000 -G opencode opencode \
+# ── Usuario no-root (1001 — 1000 lo usa el usuario 'node' de esta imagen) ──
+RUN addgroup -g 1001 opencode \
+    && adduser -D -u 1001 -G opencode -s /bin/bash opencode \
     && echo "opencode ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/opencode \
     && chmod 0440 /etc/sudoers.d/opencode \
     && mkdir -p /workspace \
@@ -27,21 +24,21 @@ USER opencode
 WORKDIR /home/opencode
 ENV HOME=/home/opencode
 
-# ── Instalar OpenCode ─────────────────────────────────────────
+# ── Instalar OpenCode ──────────────────────────────────────
 RUN curl -fsSL https://opencode.ai/install | bash
 ENV PATH=/home/opencode/.opencode/bin:/home/opencode/.local/bin:$PATH
 
-# ── Directorios de datos ──────────────────────────────────────
+# ── Directorios de datos ───────────────────────────────────
 RUN mkdir -p \
     /home/opencode/.config/opencode/users \
     /home/opencode/.local/share/opencode/users
 
-# ── Instalar dependencias Node.js ────────────────────────────
+# ── Instalar dependencias Node.js ──────────────────────────
 WORKDIR /app
-COPY --chown=opencode:opencode opencode-server/package.json opencode-server/package-lock.json* ./
-RUN npm ci --production --no-audit --no-fund 2>/dev/null || npm install --production --no-audit --no-fund
+COPY --chown=opencode:opencode opencode-server/package.json ./
+RUN npm install --production
 
-# ── Copiar código fuente ──────────────────────────────────────
+# ── Copiar código fuente ───────────────────────────────────
 COPY --chown=opencode:opencode opencode-server/server/ ./server/
 COPY --chown=opencode:opencode opencode-server/public/ ./public/
 COPY --chown=opencode:opencode opencode-server/opencode.json /home/opencode/.config/opencode/opencode.json
